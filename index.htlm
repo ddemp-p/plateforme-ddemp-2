@@ -1,0 +1,227 @@
+================================================================================
+1. COMMANDES DU TERMINAL (À exécuter dans l'ordre pour envoyer sur GitHub)
+================================================================================
+
+# Déplacez-vous d'abord dans votre dossier (remplacez par votre chemin réel)
+cd /chemin/vers/votre/dossier/ddemp-plateau
+
+# Initialiser et envoyer le projet sur votre nouveau dépôt GitHub vide
+git init
+git add .
+git commit -m "Version finale et complète : Plateforme DDEMP-Plateau (Streamlit + Personnel + PTA)"
+git branch -M main
+git remote add origin https://github.com/VOTRE_NOM_UTILISATEUR/VOTRE_NOM_DE_DEPOT.git
+git push -u origin main
+
+
+================================================================================
+2. CONTENU DU FICHIER : .gitignore
+================================================================================
+.streamlit/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+Thumbs.db
+
+
+================================================================================
+3. CONTENU DU FICHIER COMPLET : app.py
+================================================================================
+import streamlit as st
+import pandas as pd
+
+# Configuration de la page web
+st.set_page_config(page_title="DDEMP-Plateau - Gestion PTA", layout="wide")
+st.title("🇧🇯 Plateforme Intégrée de Gestion du PTA et Budgétaire")
+st.subheader("Direction Départementale des Enseignements Maternel et Primaire (DDEMP) du Plateau")
+
+# ==============================================================================
+# BASE DE DONNÉES DE SIMULATION (Stockée en mémoire pour le prototype)
+# ==============================================================================
+if 'personnel' not in st.session_state:
+    st.session_state.personnel = [
+        {"Matricule": "123456-A", "Nom & Prénoms": "Houngbédji Koffi", "Grade": "A1-1", "Service": "Service Examens", "Indice": 850},
+        {"Matricule": "789101-B", "Nom & Prénoms": "Alassane Aminatou", "Grade": "A1-3", "Service": "Conseiller Pédagogique", "Indice": 520},
+        {"Matricule": "456789-C", "Nom & Prénoms": "Dossou Jean", "Grade": "B1-1", "Service": "Secrétariat Administratif", "Indice": 350},
+    ]
+
+if 'activites' not in st.session_state:
+    st.session_state.activites = {}
+
+# Fonction de calcul automatique du taux selon la règle stricte
+def obtenir_taux_perdiem(indice):
+    if indice > 800:
+        return 15000
+    elif 400 <= indice <= 800:
+        return 10000
+    else:
+        return 8500
+
+# ==============================================================================
+# NAVIGATION DE L'APPLICATION (Menu Latéral)
+# ==============================================================================
+menu = st.sidebar.radio("Navigation", [
+    "1. État Nominatif du Personnel", 
+    "2. Planification d'Activité PTA", 
+    "3. Pointage & Suivi Financier", 
+    "4. Rapport Final & Reddition"
+])
+
+# ==============================================================================
+# MODULE 1 : ÉTAT NOMINATIF DU PERSONNEL
+# ==============================================================================
+if menu == "1. État Nominatif du Personnel":
+    st.header("📋 État Nominatif du Personnel")
+    
+    # Formulaire d'ajout d'un agent
+    with st.expander("➕ Enregistrer un nouvel agent public"):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            mat = st.text_input("Numéro Matricule")
+            nom = st.text_input("Nom & Prénoms")
+        with col2:
+            grade = st.text_input("Grade (ex: A1-1)")
+            service = st.selectbox("Service d'affectation", ["SAGE", "Service Examens", "Conseillers Pédagogiques", "Secrétariat"])
+        with col3:
+            ind = st.number_input("Indice Salarial (I)", min_value=100, max_value=2000, value=400)
+        
+        if st.button("Valider l'inscription"):
+            st.session_state.personnel.append({
+                "Matricule": mat, "Nom & Prénoms": nom, "Grade": grade, "Service": service, "Indice": ind
+            })
+            st.success("Agent enregistré avec succès !")
+
+    # Affichage du tableau de l'État Nominatif
+    df_pers = pd.DataFrame(st.session_state.personnel)
+    df_pers["Taux Perdiem Journalier (FCFA)"] = df_pers["Indice"].apply(obtenir_taux_perdiem)
+    
+    st.dataframe(df_pers, use_container_width=True)
+    st.caption(f"Nombre total d'agents enregistrés : {len(df_pers)}")
+
+# ==============================================================================
+# MODULE 2 : PLANIFICATION D'ACTIVITÉ PTA
+# ==============================================================================
+elif menu == "2. Planification d'Activité PTA":
+    st.header("🎯 Planification d'une Activité du PTA")
+    
+    with st.form("form_pta"):
+        code_pta = st.text_input("Code de l'Activité (ex: PTA-2026-ACT-04)")
+        libelle_pta = st.text_input("Libellé / Description de la mission")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            budget_mission = st.number_input("Budget alloué pour les FRAIS DE MISSION (FCFA)", min_value=0, value=500000)
+        with col2:
+            budget_carburant = st.number_input("Budget alloué pour le CARBURANT (FCFA)", min_value=0, value=150000)
+            
+        if st.form_submit_button("Enregistrer l'activité au PTA"):
+            st.session_state.activites[code_pta] = {
+                "libelle": libelle_pta,
+                "budget_mission": budget_mission,
+                "budget_carburant": budget_carburant,
+                "pointage": {},
+                "resume": ""
+            }
+            st.success(f"Activité {code_pta} initialisée avec succès dans le système.")
+
+# ==============================================================================
+# MODULE 3 : POINTAGE ET SUIVI FINANCIER EN TEMPS RÉEL
+# ==============================================================================
+elif menu == "3. Pointage & Suivi Financier":
+    st.header("⏱️ Pointage des Agents et Simulation des Écarts")
+    
+    if not st.session_state.activites:
+        st.warning("Veuillez d'abord créer une activité dans le module 2.")
+    else:
+        act_choisie = st.selectbox("Sélectionner l'activité à traiter", list(st.session_state.activites.keys()))
+        info_act = st.session_state.activites[act_choisie]
+        
+        st.info(f"**Activité :** {info_act['libelle']} | **Budget Mission :** {info_act['budget_mission']} FCFA | **Budget Carburant :** {info_act['budget_carburant']} FCFA")
+        
+        st.subheader("Saisie des présences et consommations réelles")
+        
+        tot_mission_reel = 0
+        tot_carburant_reel = 0
+        
+        for agent in st.session_state.personnel:
+            st.markdown(f"**{agent['Nom & Prénoms']}** (Matricule: {agent['Matricule']} | Grade: {agent['Grade']} | Indice: {agent['Indice']})")
+            col1, col2 = st.columns(2)
+            
+            taux = obtenir_taux_perdiem(agent['Indice'])
+            
+            with col1:
+                jours = st.number_input(f"Nombre de jours réels (Taux: {taux} FCFA/j)", min_value=0, max_value=30, value=0, key=f"j_{agent['Matricule']}")
+                cout_mission = jours * taux
+                tot_mission_reel += cout_mission
+                st.caption(f"Sous-total Mission : {cout_mission} FCFA")
+                
+            with col2:
+                carb = st.number_input(f"Frais de Carburant attribués (FCFA)", min_value=0, value=0, step=5000, key=f"c_{agent['Matricule']}")
+                tot_carburant_reel += carb
+                st.caption(f"Sous-total Carburant : {carb} FCFA")
+            
+            info_act["pointage"][agent['Matricule']] = {"jours": jours, "mission": cout_mission, "carburant": carb}
+            st.markdown("---")
+            
+        st.subheader("📊 Tableau de Bord des Écarts en Temps Réel")
+        ecart_m = info_act['budget_mission'] - tot_mission_reel
+        ecart_c = info_act['budget_carburant'] - tot_carburant_reel
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Total Dépensé Mission", f"{tot_mission_reel} FCFA", delta=f"{ecart_m} FCFA Restant")
+        with col2:
+            st.metric("Total Dépensé Carburant", f"{tot_carburant_reel} FCFA", delta=f"{ecart_c} FCFA Restant")
+            
+        if ecart_m < 0 or ecart_c < 0:
+            st.error("⚠️ ATTENTION : Un des budgets présente un dépassement critique !")
+        else:
+            st.success("✅ Budgets respectés et sous contrôle.")
+
+# ==============================================================================
+# MODULE 4 : RAPPORT FINAL ET REDDITION DE COMPTES
+# ==============================================================================
+elif menu == "4. Rapport Final & Reddition":
+    st.header("📝 Rapport Administratif et Technique Définitif")
+    
+    if not st.session_state.activites:
+        st.warning("Aucune donnée disponible.")
+    else:
+        act_choisie = st.selectbox("Sélectionner l'activité pour l'édition du rapport", list(st.session_state.activites.keys()))
+        info_act = st.session_state.activites[act_choisie]
+        
+        st.subheader("1. Compte-rendu Technique (Résumé textuel)")
+        info_act["resume"] = st.text_area(
+            "Saisir le résumé textuel de la mission (Faits marquants, difficultés rencontrées, recommandations)", 
+            value=info_act["resume"],
+            height=200
+        )
+        
+        if st.button("Enregistrer et Clôturer le Rapport"):
+            st.success("Le rapport a été validé et archivé électroniquement.")
+            
+        st.markdown("### 🖨️ Aperçu du Rapport Final Officiel")
+        st.markdown(f"""
+        ```text
+        ======================================================================
+        REPUBLIQUE DU BENIN - DIRECTION DEPARTEMENTALE DDEMP-PLATEAU
+        RAPPORT FINAL D'EXECUTION D'ACTIVITE PTA
+        ======================================================================
+        Code Activité : {act_choisie}
+        Libellé       : {info_act['libelle']}
+        
+        --- BILAN FINANCIER DES ENVELOPPES ---
+        > FRAIS DE MISSION (PERDIEMS) :
+          Budget Alloué : {info_act['budget_mission']} FCFA
+          Dépense Réelle: {sum(x['mission'] for x in info_act['pointage'].values())} FCFA
+          
+        > CARBURANT & DEPLACEMENT :
+          Budget Alloué : {info_act['budget_carburant']} FCFA
+          Dépense Réelle: {sum(x['carburant'] for x in info_act['pointage'].values())} FCFA
+        
+        --- RESUME TECHNIQUE & RECOMMANDATIONS ADMINISTRATIVES ---
+        {info_act['resume'] if info_act['resume'] else 'Aucun résumé saisi pour le moment.'}
+        ======================================================================
+        ```
+        """)
